@@ -69,11 +69,23 @@ df = df.sort_values("publishedAt")
 st.sidebar.header("⚙️ Filters")
 metric = st.sidebar.selectbox("Choose Metric", ["views", "likes", "comments"])
 top_n = st.sidebar.slider("Top N Videos", min_value=5, max_value=20, value=10)
-date_range = st.sidebar.date_input("Date Range", [df["publishedAt"].min(), df["publishedAt"].max()])
 
-# Filter by date
-df_filtered = df[(df["publishedAt"] >= pd.to_datetime(date_range[0])) &
-                 (df["publishedAt"] <= pd.to_datetime(date_range[1]))]
+# Sidebar date filter (fix applied ✅)
+date_range = st.sidebar.date_input(
+    "Date Range",
+    value=[df["publishedAt"].min().date(), df["publishedAt"].max().date()]
+)
+
+# Ensure it's always a range (start, end)
+if isinstance(date_range, tuple) or isinstance(date_range, list):
+    start_date, end_date = date_range
+else:
+    # If user picks a single date, set start=end
+    start_date = end_date = date_range
+
+# Filter dataframe
+df_filtered = df[(df["publishedAt"].dt.date >= start_date) &
+                 (df["publishedAt"].dt.date <= end_date)]
 
 # ========== TABS ==========
 tab1, tab2, tab3 = st.tabs(["📊 Overview", "🎥 Top Videos", "📈 Trends"])
