@@ -1,8 +1,8 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from googleapiclient.discovery import build
+
 st.warning("🚀 NEW VERSION LOADED")
 
 # ---------------------------
@@ -147,11 +147,19 @@ with tab3:
     # Ensure publishedAt is datetime
     df_filtered["publishedAt"] = pd.to_datetime(df_filtered["publishedAt"], errors="coerce")
 
-    # Select only numeric columns
-    numeric_cols = df_filtered.select_dtypes(include="number").columns.tolist()
+    # Explicitly pick numeric columns
+    numeric_cols = ["views", "likes", "comments"]
 
-    # Group by month and sum numeric columns only
-    df_trend = df_filtered.groupby(df_filtered["publishedAt"].dt.to_period("M"))[numeric_cols].sum()
+    # Convert them to numeric safely
+    for col in numeric_cols:
+        df_filtered[col] = pd.to_numeric(df_filtered[col], errors="coerce")
+
+    # Group by month and sum numeric only
+    df_trend = (
+        df_filtered
+        .groupby(df_filtered["publishedAt"].dt.to_period("M"))[numeric_cols]
+        .sum(min_count=1)
+    )
     df_trend.index = df_trend.index.to_timestamp()
 
     # Dropdown to choose metric
