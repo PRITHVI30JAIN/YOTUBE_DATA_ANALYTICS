@@ -1,186 +1,127 @@
-"""
-YouTube Analytics Dashboard (Streamlit)
-
-How to use:
-1. Install dependencies:
-   pip install streamlit pandas plotly google-api-python-client
-
-2. Run:
-   streamlit run youtube_analytics_streamlit.py
-
-3. In the app: paste your YouTube Data API v3 key (kept hidden), enter the Channel ID
-   (starts with "UC...") and click "Fetch data". You can then download CSV and view charts.
-
-Files created by this single-file app: it provides a downloadable `youtube_data.csv` when you fetch.
-
-Requirements:
-- Python 3.8+
-- streamlit
-- pandas
-- plotly
-- google-api-python-client
-
-Note: This is a beginner-friendly, one-file app made so you can quickly run it and claim the project
-on your resume. Customize the UI text (your name/logo) before publishing to GitHub or Streamlit Cloud.
-
-"""
-
 import streamlit as st
 import pandas as pd
-from googleapiclient.discovery import build
 import plotly.express as px
-from datetime import datetime
-import math
+from googleapiclient.discovery import build
+import datetime
 
-st.set_page_config(page_title="YouTube Analytics Dashboard", layout="wide")
+# ========== CONFIG ==========
+st.set_page_config(page_title="YouTube Analytics Dashboard", page_icon="📊", layout="wide")
+API_KEY = "YOUR_API_KEY"   # Replace with your YouTube Data API v3 key
+CHANNEL_ID = "YOUR_CHANNEL_ID"  # Replace with your channel ID
 
-st.sidebar.title("Quick Setup")
-st.sidebar.markdown("Paste your **YouTube Data API v3** key and the **Channel ID**, then press Fetch.")
-api_key = st.sidebar.text_input("YouTube API Key", type="password")
-channel_id = st.sidebar.text_input("Channel ID (starts with 'UC')")
-max_videos = st.sidebar.slider("Max videos to fetch", 5, 50, 20)
-fetch_button = st.sidebar.button("Fetch data")
-
-st.title("📺 YouTube Analytics Dashboard")
-st.write("A lightweight Streamlit dashboard that pulls live channel + video stats using YouTube Data API v3.")
-
-st.markdown("---")
-
-# Small helper
-def parse_published(published_at):
-    try:
-        # Example format: '2020-01-01T12:34:56Z'
-        return datetime.fromisoformat(published_at.replace('Z', '+00:00'))
-    except Exception:
-        return None
-
-# Function to fetch data
-@st.cache_data(show_spinner=False)
-def fetch_channel_and_videos(api_key, channel_id, max_videos=20):
+# ========== YOUTUBE API ==========
+def get_channel_stats(api_key, channel_id):
     youtube = build("youtube", "v3", developerKey=api_key)
+    request = youtube.channels().list(
+        part="snippet,contentDetails,statistics",
+        id=channel_id
+    )
+    response = request.execute()
+    return response
 
-    # Channel details
-    ch_req = youtube.channels().list(part="statistics,contentDetails,snippet", id=channel_id)
-    ch_res = ch_req.execute()
-    if not ch_res.get("items"):
-        raise ValueError("Channel not found. Check Channel ID.")
+def get_video_stats(api_key, playlist_id, max_results=20):
+    youtube = build("youtube", "v3", developerKey=api_key)
+    videos = []
+    next_page_token = None
 
-    ch_item = ch_res["items"][0]
-    stats = ch_item.get("statistics", {})
-    snippet = ch_item.get("snippet", {})
-    uploads_playlist = ch_item["contentDetails"]["relatedPlaylists"]["uploads"]
-
-    # Fetch playlist items (video IDs)
-    video_ids = []
-    nextPageToken = None
-    while len(video_ids) < max_videos:
-        pl_req = youtube.playlistItems().list(
-            part="snippet",
-            playlistId=uploads_playlist,
-            maxResults=min(50, max_videos - len(video_ids)),
-            pageToken=nextPageToken,
+    while True:
+        request = youtube.playlistItems().list(
+            part="contentDetails",
+            playlistId=playlist_id,
+            maxResults=max_results,
+            pageToken=next_page_token
         )
-        pl_res = pl_req.execute()
-        for item in pl_res.get("items", []):
-            res_id = item["snippet"]["resourceId"].get("videoId")
-            if res_id:
-                video_ids.append(res_id)
-        nextPageToken = pl_res.get("nextPageToken")
-        if not nextPageToken:
+        response = request.execute()
+
+        video_ids = [item["contentDetails"]["videoId"] for item in response["items"]]
+
+        stats_request = youtube.videos().list(
+            part="snippet,statistics",
+            id=",".join(video_ids)
+        )
+        stats_response = stats_request.execute()
+
+        for item in stats_response["items"]:
+            videos.append({
+                "title": item["snippet"]["title"],
+                "publishedAt": item["snippet"]["publishedAt"],
+                "views": int(item["statistics"].get("viewCount", 0)),
+                "likes": int(item["statistics"].get("likeCount", 0)),
+                "comments": int(item["statistics"].get("commentCount", 0))
+            })
+
+        next_page_token = response.get("nextPageToken")
+        if not next_page_token:
             break
 
-    # Fetch video statistics in batches of 50
-    data = []
-    for i in range(0, len(video_ids), 50):
-        batch = video_ids[i : i + 50]
-        v_req = youtube.videos().list(part="snippet,statistics", id=",".join(batch))
-        v_res = v_req.execute()
-        for v in v_res.get("items", []):
-            snip = v.get("snippet", {})
-            stts = v.get("statistics", {})
-            pub = parse_published(snip.get("publishedAt", ""))
-            data.append(
-                {
-                    "videoId": v.get("id"),
-                    "title": snip.get("title"),
-                    "publishedAt": pub,
-                    "views": int(stts.get("viewCount", 0)),
-                    "likes": int(stts.get("likeCount", 0)) if stts.get("likeCount") else 0,
-                    "comments": int(stts.get("commentCount", 0)) if stts.get("commentCount") else 0,
-                    "description": snip.get("description", ""),
-                }
-            )
+    return pd.DataFrame(videos)
 
-    df = pd.DataFrame(data)
-    if not df.empty:
-        df.sort_values(by="publishedAt", inplace=True)
-        df.reset_index(drop=True, inplace=True)
+# ========== FETCH DATA ==========
+channel_data = get_channel_stats(API_KEY, CHANNEL_ID)
+playlist_id = channel_data["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+df = get_video_stats(API_KEY, playlist_id)
 
-    channel_info = {
-        "title": snippet.get("title", ""),
-        "description": snippet.get("description", ""),
-        "subscriberCount": int(stats.get("subscriberCount", 0)) if stats.get("subscriberCount") else 0,
-        "viewCount": int(stats.get("viewCount", 0)) if stats.get("viewCount") else 0,
-        "videoCount": int(stats.get("videoCount", 0)) if stats.get("videoCount") else 0,
-    }
+df["publishedAt"] = pd.to_datetime(df["publishedAt"])
+df = df.sort_values("publishedAt")
 
-    return channel_info, df
+# ========== SIDEBAR ==========
+st.sidebar.header("⚙️ Filters")
+metric = st.sidebar.selectbox("Choose Metric", ["views", "likes", "comments"])
+top_n = st.sidebar.slider("Top N Videos", min_value=5, max_value=20, value=10)
+date_range = st.sidebar.date_input("Date Range", [df["publishedAt"].min(), df["publishedAt"].max()])
 
-# Main interaction
-if fetch_button:
-    if not api_key or not channel_id:
-        st.sidebar.error("Please provide both API Key and Channel ID.")
-    else:
-        with st.spinner("Fetching channel info and videos..."):
-            try:
-                channel_info, df = fetch_channel_and_videos(api_key, channel_id, max_videos)
+# Filter by date
+df_filtered = df[(df["publishedAt"] >= pd.to_datetime(date_range[0])) &
+                 (df["publishedAt"] <= pd.to_datetime(date_range[1]))]
 
-                # Header / KPIs
-                st.header(f"{channel_info.get('title', '')}")
-                cols = st.columns(3)
-                cols[0].metric("Subscribers", f"{channel_info.get('subscriberCount'):,}")
-                cols[1].metric("Total views", f"{channel_info.get('viewCount'):,}")
-                cols[2].metric("Total videos", f"{channel_info.get('videoCount'):,}")
+# ========== TABS ==========
+tab1, tab2, tab3 = st.tabs(["📊 Overview", "🎥 Top Videos", "📈 Trends"])
 
-                st.markdown("---")
+# ---- OVERVIEW ----
+with tab1:
+    st.subheader("📊 Channel Overview")
 
-                if df.empty:
-                    st.info("No videos fetched for this channel.")
-                else:
-                    # Show table (top-level columns)
-                    display_df = df.copy()
-                    display_df["publishedAt"] = display_df["publishedAt"].dt.strftime("%Y-%m-%d")
-                    st.subheader("Fetched video data")
-                    st.dataframe(display_df[["title", "publishedAt", "views", "likes", "comments"]])
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("👀 Total Views", f"{df['views'].sum():,}")
+    with col2:
+        st.metric("👍 Total Likes", f"{df['likes'].sum():,}")
+    with col3:
+        st.metric("💬 Total Comments", f"{df['comments'].sum():,}")
+    with col4:
+        st.metric("🎥 Total Videos", f"{len(df):,}")
 
-                    # Controls for charts
-                    col_a, col_b = st.columns([2, 1])
-                    with col_b:
-                        top_n = st.slider("Top N videos for charts", 3, min(20, max(3, len(df))), 5)
+# ---- TOP VIDEOS ----
+with tab2:
+    st.subheader(f"🎥 Top {top_n} Videos by {metric.title()}")
+    top_videos = df_filtered.sort_values(metric, ascending=False).head(top_n)
 
-                    with st.container():
-                        st.subheader("Top videos by views")
-                        fig = px.bar(df.nlargest(top_n, "views").sort_values("views"), x="views", y="title", orientation="h", title=f"Top {top_n} videos by views")
-                        st.plotly_chart(fig, use_container_width=True)
+    fig_bar = px.bar(top_videos, x="title", y=metric, text=metric,
+                     title=f"Top {top_n} Videos by {metric.title()}",
+                     color=metric, color_continuous_scale="viridis")
+    fig_bar.update_layout(xaxis_tickangle=-45, height=600)
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-                    st.subheader("Views over publish date")
-                    fig2 = px.line(df, x="publishedAt", y="views", markers=True, title="Views by published date")
-                    st.plotly_chart(fig2, use_container_width=True)
+    fig_pie = px.pie(top_videos, values=metric, names="title",
+                     title=f"Contribution of Top {top_n} Videos by {metric.title()}",
+                     hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+    st.plotly_chart(fig_pie, use_container_width=True)
 
-                    # Download CSV
-                    csv = df.to_csv(index=False)
-                    st.download_button(label="Download fetched data as CSV", data=csv, file_name="youtube_data.csv", mime="text/csv")
+# ---- TRENDS ----
+with tab3:
+    st.subheader("📈 Growth Trends Over Time")
+    df_trend = df_filtered.groupby(df_filtered["publishedAt"].dt.to_period("M")).sum()
+    df_trend.index = df_trend.index.to_timestamp()
 
-                st.success("Done — data fetched successfully.")
-            except Exception as e:
-                st.error(f"Failed to fetch data: {e}")
+    fig_line = px.line(df_trend, x=df_trend.index, y=metric,
+                       markers=True, title=f"{metric.title()} Over Time",
+                       color_discrete_sequence=["#FF4B4B"])
+    st.plotly_chart(fig_line, use_container_width=True)
 
-else:
-    st.info("Enter your API Key and Channel ID on the left sidebar, adjust Max videos, then click 'Fetch data'.")
-
-# Footer / Help
-st.markdown("---")
-st.caption("Tip: To find Channel ID, open YouTube Studio -> Settings -> Channel -> Advanced settings, or use the channel's URL. If you get a quota error, reduce the number of videos fetched.")
-
-
-# End of file
+# ========== EXPORT ==========
+st.sidebar.download_button(
+    "📥 Download Data as CSV",
+    data=df_filtered.to_csv(index=False).encode("utf-8"),
+    file_name="youtube_data.csv",
+    mime="text/csv"
+)
