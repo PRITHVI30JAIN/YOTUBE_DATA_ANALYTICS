@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from googleapiclient.discovery import build
-import datetime
 
 # ========== CONFIG ==========
 st.set_page_config(page_title="YouTube Analytics Dashboard", page_icon="📊", layout="wide")
-API_KEY = "YOUR_API_KEY"   # Replace with your YouTube Data API v3 key
-CHANNEL_ID = "YOUR_CHANNEL_ID"  # Replace with your channel ID
+
+# 🔑 Your API Key and MrBeast's Channel ID
+API_KEY = "AIzaSyCxjHXpZKCFFTrhtPg_MELMd7ajnGb2yeA"
+CHANNEL_ID = "UCX6OQ3DkcsbYNE6H8uQQuVA"  # MrBeast's official channel ID
 
 # ========== YOUTUBE API ==========
 def get_channel_stats(api_key, channel_id):
