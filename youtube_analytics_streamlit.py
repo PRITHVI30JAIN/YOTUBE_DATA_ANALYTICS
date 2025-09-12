@@ -80,7 +80,6 @@ date_range = st.sidebar.date_input(
 if isinstance(date_range, tuple) or isinstance(date_range, list):
     start_date, end_date = date_range
 else:
-    # If user picks a single date, set start=end
     start_date = end_date = date_range
 
 # Filter dataframe
@@ -123,12 +122,21 @@ with tab2:
 # ---- TRENDS ----
 with tab3:
     st.subheader("📈 Growth Trends Over Time")
-    df_trend = df_filtered.groupby(df_filtered["publishedAt"].dt.to_period("M")).sum()
+
+    # Group by month and aggregate only numeric columns ✅
+    df_trend = df_filtered.groupby(df_filtered["publishedAt"].dt.to_period("M"))[
+        ["views", "likes", "comments"]
+    ].sum()
     df_trend.index = df_trend.index.to_timestamp()
 
-    fig_line = px.line(df_trend, x=df_trend.index, y=metric,
-                       markers=True, title=f"{metric.title()} Over Time",
-                       color_discrete_sequence=["#FF4B4B"])
+    fig_line = px.line(
+        df_trend,
+        x=df_trend.index,
+        y=metric,
+        markers=True,
+        title=f"{metric.title()} Over Time",
+        color_discrete_sequence=["#FF4B4B"]
+    )
     st.plotly_chart(fig_line, use_container_width=True)
 
 # ========== EXPORT ==========
