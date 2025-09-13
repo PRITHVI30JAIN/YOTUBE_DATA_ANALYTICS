@@ -25,7 +25,7 @@ An interactive dashboard built with **Streamlit** that provides insights into an
 ![Top Videos](screenshots/top_videos.png)
 
 ### Trends
-![Trends](screenshots/Screenshotstrends.png)
+![Trends](screenshots/trends.png)
 
 
 
