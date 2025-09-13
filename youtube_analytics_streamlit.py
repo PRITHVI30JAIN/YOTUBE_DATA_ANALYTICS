@@ -3,16 +3,25 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 import traceback
-
-# ---------------------------
-# CONFIG (imported, not exposed)
-# ---------------------------
-from config import API_KEY, CHANNEL_ID
 
 st.set_page_config(page_title="YouTube Analytics Dashboard", page_icon="📊", layout="wide")
 st.warning("🚀 NEW VERSION LOADED — DATE FILTER REMOVED")
+
+# ---------------------------
+# CONFIG (API Key + Channel ID)
+# ---------------------------
+try:
+    # First try Streamlit secrets (for Streamlit Cloud)
+    API_KEY = st.secrets["API_KEY"]
+    CHANNEL_ID = st.secrets["CHANNEL_ID"]
+except Exception:
+    # Fallback: try local config.py
+    try:
+        from config import API_KEY, CHANNEL_ID
+    except ImportError:
+        st.error("❌ No API key found. Please set Streamlit secrets or create config.py with API_KEY and CHANNEL_ID.")
+        st.stop()
 
 # ---------------------------
 # HELPERS
