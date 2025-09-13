@@ -7,7 +7,7 @@ from googleapiclient.errors import HttpError
 import traceback
 
 st.set_page_config(page_title="YouTube Analytics Dashboard", page_icon="📊", layout="wide")
-st.warning("🚀 Recruiter Demo Version — API Key Secured")
+
 
 # ---------------------------
 # CONFIG (API Key + Channel Input)
