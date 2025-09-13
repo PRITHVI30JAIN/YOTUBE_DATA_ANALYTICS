@@ -86,5 +86,6 @@ An interactive dashboard built with **Streamlit** that provides insights into an
 ---
 
 ## 🤝 Connect with Me  
-- [LinkedIn](www.linkedin.com/in/prithvi-jain-122422329)  
+-[LinkedIn Profile](https://www.linkedin.com/in/prithvi-jain-122422329)
+
 - [GitHub](https://github.com/PRITHVI30JAIN/YOTUBE_DATA_ANALYTICS)  
