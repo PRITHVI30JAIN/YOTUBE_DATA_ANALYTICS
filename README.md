@@ -16,8 +16,17 @@ An interactive dashboard built with **Streamlit** that provides insights into an
 - **Pandas** (for data handling)  
 - **YouTube Data API v3**  
 
-## 📸 Screenshots  
-### Dashboard Overview  
+## 📸 Screenshots
+
+### Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+### Top Videos
+![Top Videos](screenshots/top_videos.png)
+
+### Trends
+![Trends](screenshots/Screenshotstrends.png)
+
 
 
 
