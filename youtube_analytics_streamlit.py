@@ -5,16 +5,14 @@ import plotly.express as px
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import traceback
-from datetime import date as datecls
+
+# ---------------------------
+# CONFIG (imported, not exposed)
+# ---------------------------
+from config import API_KEY, CHANNEL_ID
 
 st.set_page_config(page_title="YouTube Analytics Dashboard", page_icon="📊", layout="wide")
-st.warning("🚀 NEW VERSION LOADED — DATE FILTER BUGFIX")
-
-# ---------------------------
-# CONFIG (replace key if you want private use)
-# ---------------------------
-API_KEY = "AIzaSyCxjHXpZKCFFTrhtPg_MELMd7ajnGb2yeA"
-CHANNEL_ID = "UCX6OQ3DkcsbYNE6H8uQQuVA"
+st.warning("🚀 NEW VERSION LOADED — DATE FILTER REMOVED")
 
 # ---------------------------
 # HELPERS
@@ -76,7 +74,7 @@ def get_video_details(api_key, playlist_id, max_videos=200):
 # APP START
 # ---------------------------
 st.title("📊 YouTube Analytics Dashboard")
-st.write("Robust date filter / debug mode included. If anything errors, the app will show a clear message and stack trace.")
+st.write("This version uses the full dataset with no date filtering.")
 
 # Fetch channel and videos
 try:
@@ -106,87 +104,8 @@ df["publishedAt"] = pd.to_datetime(df["publishedAt"], errors="coerce")
 for c in ["views", "likes", "comments"]:
     df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
 
-# Debug toggle
-debug = st.sidebar.checkbox("Show debug info (types & date_range)", value=False)
-
-# Determine min/max dates available
-has_dates = df["publishedAt"].notna().any()
-min_date = df["publishedAt"].min().date() if has_dates else None
-max_date = df["publishedAt"].max().date() if has_dates else None
-
-# Date input with safe defaults
-st.sidebar.header("Filters")
-if min_date and max_date:
-    date_input_value = st.sidebar.date_input("Select Date Range (pick one or two dates):", value=[min_date, max_date])
-else:
-    date_input_value = st.sidebar.date_input("Select Date Range (no publish dates available):")
-
-# Top N and metric
-top_n = st.sidebar.slider("Top N videos", 3, 50, 10)
-metric = st.sidebar.selectbox("Metric for Top Videos", ["views", "likes", "comments"])
-
-# SAFE parsing of date_input_value into start_ts, end_ts
-start_ts = None
-end_ts = None
-try:
-    # Case: user selected a list/tuple (range) from the widget
-    if isinstance(date_input_value, (list, tuple)):
-        if len(date_input_value) == 2:
-            start, end = date_input_value
-        elif len(date_input_value) == 1:
-            start = end = date_input_value[0]
-        else:
-            start = min_date
-            end = max_date
-    else:
-        # Single date (could be a datetime.date or pandas Timestamp)
-        start = end = date_input_value
-
-    # If any are None (or still not set), fallback to full range
-    if start is None or (isinstance(start, float) and pd.isna(start)):
-        start = min_date
-    if end is None or (isinstance(end, float) and pd.isna(end)):
-        end = max_date
-
-    if start is not None:
-        # convert date -> timestamp at start of day
-        start_ts = pd.to_datetime(start).normalize()
-    if end is not None:
-        # include full day for end_ts (set to 23:59:59)
-        end_ts = pd.to_datetime(end).normalize() + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-
-except Exception as e:
-    st.error("Error parsing the date input. Falling back to full dataset.")
-    st.error(str(e))
-    st.text(traceback.format_exc())
-    start_ts = None
-    end_ts = None
-
-if debug:
-    st.write("DEBUG: date_input_value:", date_input_value)
-    st.write("DEBUG: min_date, max_date:", min_date, max_date)
-    st.write("DEBUG: start_ts, end_ts:", start_ts, end_ts)
-    st.write("DEBUG: publishedAt dtype:", df["publishedAt"].dtype)
-    st.write("DEBUG: sample publishedAt values:", df["publishedAt"].head().tolist())
-
-# Apply filter safely
-try:
-    if start_ts is not None and end_ts is not None:
-        df_filtered = df[(df["publishedAt"] >= start_ts) & (df["publishedAt"] <= end_ts)].copy()
-    else:
-        df_filtered = df.copy()
-except Exception as e:
-    st.error("Unexpected error while applying the date filter.")
-    st.error(str(e))
-    st.text(traceback.format_exc())
-    # fallback
-    df_filtered = df.copy()
-
-# If empty after filtering, show message
-if df_filtered.empty:
-    st.info("No videos match the selected filter. Try widening the date range or disable the filter.")
-    # still continue to show empty tables/charts (or stop)
-    # st.stop()
+# ✅ No date filter — use full dataset
+df_filtered = df.copy()
 
 # ---------- UI Tabs ----------
 tab1, tab2, tab3 = st.tabs(["Overview", "Top Videos", "Trends"])
@@ -201,9 +120,11 @@ with tab1:
     st.dataframe(df_filtered[["title", "publishedAt", "views", "likes", "comments"]].head(20))
 
 with tab2:
-    st.subheader(f"Top {top_n} videos by {metric}")
+    st.subheader("Top Videos")
+    top_n = st.sidebar.slider("Top N videos", 3, 50, 10)
+    metric = st.sidebar.selectbox("Metric for Top Videos", ["views", "likes", "comments"])
     if df_filtered[metric].isna().all():
-        st.info(f"No {metric} data available for the selected filter.")
+        st.info(f"No {metric} data available.")
     else:
         top = df_filtered.sort_values(metric, ascending=False).head(top_n)
         fig = px.bar(top, x=metric, y="title", orientation="h", text=metric, color=metric, color_continuous_scale="viridis")
@@ -212,7 +133,6 @@ with tab2:
 
 with tab3:
     st.subheader("Trends (monthly)")
-    # Build year-month string to avoid summing datetimes
     df_trend_source = df_filtered.copy()
     df_trend_source["year_month"] = df_trend_source["publishedAt"].dt.strftime("%Y-%m")
     if df_trend_source["year_month"].isna().all():
@@ -223,11 +143,16 @@ with tab3:
         grouped = grouped.sort_values("ts")
         trend_metric = st.selectbox("Metric to plot", ["views", "likes", "comments"], index=0, key="trend_metric")
         if grouped.empty or grouped[trend_metric].isna().all():
-            st.info("No numeric trend data for selected filters.")
+            st.info("No numeric trend data.")
         else:
             fig2 = px.line(grouped, x="ts", y=trend_metric, markers=True, title=f"{trend_metric.title()} by month")
             fig2.update_layout(xaxis_title="Month", yaxis_title=trend_metric.title(), height=450)
             st.plotly_chart(fig2, use_container_width=True)
 
 # Download
-st.sidebar.download_button("Download filtered CSV", df_filtered.to_csv(index=False).encode("utf-8"), "youtube_filtered.csv", "text/csv")
+st.sidebar.download_button(
+    "Download full CSV",
+    df_filtered.to_csv(index=False).encode("utf-8"),
+    "youtube_full.csv",
+    "text/csv"
+)
