@@ -69,11 +69,20 @@ An interactive dashboard built with **Streamlit** that provides insights into an
 
 ## 📂 Project Structure  
 ```
-.
-├── youtube_analytics_streamlit.py   # Main Streamlit app
+YOTUBE_DATA_ANALYTICS/
+│
+├── youtube_analytics_streamlit.py   # main Streamlit app
 ├── requirements.txt                 # Python dependencies
-├── README.md                        # Project documentation
-└── config.py (ignored)              # Local API key (not in GitHub)
+├── README.md                        # Project description + screenshots + links
+│
+├── screenshots/                     # all images for README
+│   ├── dashboard.png
+│   ├── top_videos.png
+│   └── trends.png
+│
+└── .streamlit/                      # Streamlit config folder (not uploaded to GitHub usually)
+    └── secrets.toml                  # API_KEY, CHANNEL_ID (private)
+
 ```
 
 ---
